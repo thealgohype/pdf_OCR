@@ -14,18 +14,12 @@ PORT = os.getenv('PORT', '8000')
 
 ALLOWED_HOSTS = ['*']  # Or specify your domain
 
-# The following lines ensure the server binds to the correct port
+# If you need any specific configuration for Render
 if os.getenv('RENDER'):
-    import django_heroku
-    django_heroku.settings(locals())
+    # Any Render-specific settings can go here
+    pass
 
-    # Overwrite the PORT variable with the one set by Render
-    PORT = os.getenv('PORT')
-    if PORT:
-        os.environ['PORT'] = PORT
-        
 DEBUG = False
-ALLOWED_HOSTS = ['*']
 
 X_FRAME_OPTIONS = 'ALLOW-FROM *'
 
