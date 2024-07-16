@@ -9,6 +9,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-1l=gi9a4@%egq&(hzrusslji4a2j-&&fgqz!^jjad80s7swo95'
 # SECURITY WARNING: don't run with debug turned on in production!
+
+PORT = os.getenv('PORT', '8000')
+
+ALLOWED_HOSTS = ['*']  # Or specify your domain
+
+# The following lines ensure the server binds to the correct port
+if os.getenv('RENDER'):
+    import django_heroku
+    django_heroku.settings(locals())
+
+    # Overwrite the PORT variable with the one set by Render
+    PORT = os.getenv('PORT')
+    if PORT:
+        os.environ['PORT'] = PORT
+        
 DEBUG = False
 ALLOWED_HOSTS = ['*']
 
