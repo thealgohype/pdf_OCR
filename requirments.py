@@ -1,0 +1,13 @@
+django
+djangorestframework
+python-dotenv
+qdrant-client
+langchain
+sentence-transformers
+PyMuPDF
+pdf2image
+pillow
+boto3
+openai
+google-generativeai
+anthropic

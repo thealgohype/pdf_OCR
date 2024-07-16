@@ -1,211 +1,280 @@
-from .models import *
-from .serializers import *
-from .services import *
-from django.conf import settings
-from django.shortcuts import redirect
-from rest_framework.views import APIView
-from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view
-from django.http import JsonResponse
-from django.contrib.auth import get_user_model
-from django.shortcuts import render, redirect
 from django.http import HttpResponse
+from django.http.response import json
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
-from chaty.llm import LLMChain
-from rest_framework.response import Response
-from datetime import datetime
-from google.cloud import texttospeech
-import google.auth
-from google.oauth2 import service_account
-import os
-from django.contrib.auth.decorators import login_required
-from bson import ObjectId
-import pytz
+from django.http import HttpResponse
 import base64
-from .models import mytest
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.permissions import AllowAny
+from openai import OpenAI
+from PIL import Image
+import boto3
+import io
+from PIL import Image
+import base64
+import os
+from botocore.exceptions import ClientError
+import google.generativeai as genai
+from anthropic import Anthropic
+import re
+from collections import Counter
+import time
+from pdf2image import convert_from_bytes
+import tempfile
+import fitz
+from dotenv import load_dotenv
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as rest
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from qdrant_client import QdrantClient, models
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain.schema import Document
 
-User = get_user_model()
-
-class GoogleLoginApi(APIView):
-    def get(self, request, *args, **kwargs):
-        auth_serializer = AuthSerializer(data=request.GET)
-        auth_serializer.is_valid(raise_exception=True)
-        
-        validated_data = auth_serializer.validated_data
-        user_data, jwt_token = createJwtToken(validated_data)
-        
-        response = redirect(settings.BASE_APP_URL)
-        response.set_cookie('dsandeavour_access_token', jwt_token, max_age = 60 * 24 * 60 * 60)
-        return response
-    
-    def post(self, request, *args, **kwargs):
-        pass
-
-@csrf_exempt
-@api_view(['GET'])
-def get_user_all_records(request):
-    if request.method == 'GET':
-        users = User.objects.all()
-        if users.exists():
-            response_data = [
-                {
-                    'username': user.username,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name
-                } for user in users
-            ]
-            return JsonResponse({'data': response_data}, safe=False, status=200)
-        else:
-            return JsonResponse({'message': 'No records found'}, status=200)
-
-    return JsonResponse({'error': 'Invalid request method'}, status=400)
+load_dotenv()
 
 
-@csrf_exempt
-@api_view(['POST', 'GET'])
-def add_test(request):
-    if request.method == 'POST':
-        user = request.user
-        if not user.is_authenticated:
-            #return JsonResponse({'error': 'User not authenticated'}, status=401)
-            user.email = 'default'
-        
-        data = request.data
-        llm_text = data.get('LLM')
-        text_data = data.get('text')
+def index(request):
+    return HttpResponse('ITS Running')
 
-        res1 = LLMChain(llm_text, text_data)
-        timestamp = datetime.now()
 
-        # Save the data to your model
-        session_id = timestamp.strftime("%Y-%m-%d")  # Using date as session identifier
+class HybridSearcher:
 
-        # Save the data to your model
-        modeldb = mytest(
-            val1=user.email,
-            val2=timestamp,
-            val3=llm_text,
-            val4=text_data,
-            val5=res1,
-            session=session_id  
-        )
-        modeldb.save()
+    def __init__(self, qdrant_url, qdrant_api_key, collection_name):
+        self.qdrant_url = qdrant_url
+        self.qdrant_api_key = qdrant_api_key
+        self.collection_name = collection_name
+        # Initialize Qdrant client
+        self.client = QdrantClient(url=self.qdrant_url,
+                                   api_key=self.qdrant_api_key,
+                                   prefer_grpc=True)
+        # Initialize embeddings
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-        # Prepare the response data
-        data = {
-            'Time_Initiated': timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-            'LLM_type': llm_text,
-            'input_text': text_data,
-            'AI_text': res1,
-            'User_Email': user.email
-        }
+    def hybrid_search(self, query, limit=5):
+        # Vector search
+        vector_results = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=self.embeddings.embed_query(query),
+            limit=limit)
 
-        data1 = []
-        for i in data:
-            data1.append(data[i])
-        data1 = [
-            str(item) if isinstance(item, ObjectId) else item for item in data1
-        ]
-        #val = our_collection.find().sort('_id', -1).limit(1)
-        #data = []
-        #for row in val:
-        #    row['_id'] = str(row['_id'])
-        #    data.append(row)
-        project_id = "upbeat-grammar-423310-i8"
-        private_key = """-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCLYn+t1vJDDRqF\nEG8VRyTihN4At/sEAHf/q3IFRQ3D96E5jkLmQs5ELJmXpUm3R1rdi+XNPkhcEFwU\nh6lFkf4B2wLDkpyVeXZfeXYvo88C1ZAMhb33QWVQ3rkz6ijpM0d321POapVfvYE0\n5sSPYOjaiPHm8ulsdyDVMndwZ//kAAF/qcNpgTFXiWUFHLN11l0DXFzOir5PaX7N\n4utpSxqI+Q6MsRieJR0QNhYPXPXX2c2b3DuJoFDJzsQd3r1kNe6z5e6DacBjqPEX\nt3c1qoVdzHdXVFxRr4I8x0uwMJX8oZDfHoc0DeDaEx5DXRBBII1R6sIYv1yf5iuF\nfBXoQZDVAgMBAAECgf95JKLT9H2ayUjDXgUt+SeVuOU6uqzwTXf+PoRbEClmqVL3\nMy3x8x5TInBb3My0/s96vpx8RiWd3popPb9hOAIMms1MLaDqSScY0/hkb3r8e6E3\nQQZaX/wuzWUqOdpU1LzI71dnkDtDevFRiUBNXW0EgwG8OGOoYeGnarVkfP9qqU4B\npRA6hlQC1V8KPaCnBlnq+dnqtWf9CiNoplLvKtDwEJ7v3L3p0KSpAjWww9kJj2MD\nzSgL2sMQUc8mjoyBUnpb6fEa2owG1hVBTyDVeyAJfHyyJFMucvPNUeNkpcdsKmyf\n3XBIhUmQ48WvfMDG4aVJILZKzVfkNflKmIAN9+8CgYEAxNB6Z0ZSMCSDR1Y9mc/o\nfpPKLchsP3eFba1LhIOjJD2L3Bqs+EDcRKl5wxtpt6rP4Ky20NwTJRkZOwWEAP5p\nJtQreiAtqklWLlrUywqOvXBL+XoPhzzlSs5k2JWe2CXYIikKplmN99zQLqQVLmlQ\nYA6pBc4CLx6NuLyeQdfUeecCgYEAtUzevYFtpRz6K6KpaAJfxTB9Kfg+VuwWi7i1\nn8DZJewRFa3dYHqO9utzabwtTVxRWQAwJmUNrcw6klV9BfZYBKUsluIIIuWIIrRh\nXldHjKcwf/S0/PqWSY0i8yV1Ws9fLoVr0uBMoPrBrxqq5rdxWDdvwrZM15DQ1k5A\ncPFln+MCgYEAmjchMjsPu1lg5EzXB+a5LjVvfmBFMZXdnwri2XqsIoF3TYg5cGyi\nK8r/9blNJPVa3Zl3xkArYC5CbtTrkjvG+P3W82KzZXMBbGEPy+kB375WSa0y7azx\nnaQLsQnL5WIB8QJnreEONOF43pMDZdJvgFT8a+f4HiO6uL5S4xTTEJECgYBhS96h\nrusL2FA9yK7Hfbat2YbiVjIGbe7vjvIRyOoAWv8UNll+5GcDBnrKvM1HHgseC2bL\nxCGiKt8oFy7gW0MDQy15z9Xz/GCh11IF0is4xaTWlpnmxgiPcmnWOT0QvgdjrQCf\ni/Yz0j7NXS9oX/w5Do8w3KrCaRpaWGZm9nXGZwKBgQCNYSlAFejqLbblOZVQJbPX\ny2HmbAyPAcXK5uQzcj+19F/jgCBpIYto8dH0dmccw9vzdJT4EhU7Z2/iPLOLXEp5\nW5k42jMvWjaMOjJZtYSTHPSpLFCRHHu7EXRJglgvYRJoVTKH6qe5Y5rPMeTxdl9a\ntr0DnmPb+btQiqB1dAfzEA==\n-----END PRIVATE KEY-----\n"""
-        client_email = "test-account@upbeat-grammar-423310-i8.iam.gserviceaccount.com"
-        client_id = "116963889449646785199"
-        client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/test-account%40upbeat-grammar-423310-i8.iam.gserviceaccount.com"
+        # Text search
+        text_results = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=self.embeddings.embed_query(query),
+            query_filter=models.Filter(must=[
+                models.FieldCondition(key="page_content",
+                                      match={"text": query})
+            ]),
+            limit=limit)
 
-        key_content = {
-            "type": "service_account",
-            "project_id": project_id,
-            "private_key_id": os.getenv('private_key_id'),
-            "private_key": private_key,
-            "client_email": client_email,
-            "client_id": client_id,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url":
-            "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": client_x509_cert_url
-        }
+        # Combine and sort results
+        combined_results = []
+        for result in vector_results + text_results:
+            if result.payload and "page_content" in result.payload:
+                doc = Document(page_content=result.payload["page_content"],
+                               metadata=result.payload.get("metadata", {}))
+                combined_results.append((doc, result.score))
 
-        credentials = service_account.Credentials.from_service_account_info(
-            key_content)
+        sorted_results = sorted(combined_results,
+                                key=lambda x: x[1],
+                                reverse=True)
 
-        client = texttospeech.TextToSpeechClient(credentials=credentials)
+        return sorted_results[:limit]
 
-        # Set the voice parameters
-        #voice = texttospeech.VoiceSelectionParams(
-        #    language_code="en-US",
-        #    ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL)
-        voice = texttospeech.VoiceSelectionParams(
-            language_code="en-US",
-            name="en-US-Journey-O"
-        )
-        
-        
-        # Set the audio configuration
-        audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3,
-            effects_profile_id=['small-bluetooth-speaker-class-device'],
-            speaking_rate=1,
-            pitch=1)
-
-        synthesis_input = texttospeech.SynthesisInput(text=res1)
-        response = client.synthesize_speech(input=synthesis_input,
-                                            voice=voice,
-                                            audio_config=audio_config)
-
-        #return JsonResponse({'data1':data1},status=200)
-        #return HttpResponse(response.audio_content, content_type='audio/mp3')
-        #response_data = {'list': data1}
-        #json_data = json.dumps(response_data)
-        #response1 = HttpResponse(response.audio_content,
-        #                        content_type='audio/mp3')
-        #response1['Content-Disposition'] = 'attachment; filename="audio.mp3"'
-        #response1['X-Custom-Header'] = json_data
-        #return response1
-        audio_content_base64 = base64.b64encode(
-            response.audio_content).decode('utf-8')
-        response_data = {'audio_content': audio_content_base64, 'data': data1}
-
-        return JsonResponse(response_data)
-
-    return JsonResponse({'error': 'Invalid request method'}, status=400)
-
-@csrf_exempt
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def get_grouped_data(request):
-    if request.method == 'GET':
-        user = request.user
-        if not user.is_authenticated:
-            #return JsonResponse({'error': 'User not authenticated'}, status=401)
-            user.email = 'default'
-        # Retrieve entries for the current user sorted by 'session'      
-        entries = mytest.objects.filter(val1=user.email).order_by('session')
-
-        # Organize data by 'session'
-        grouped_data = {}
-        for entry in entries:
-            session_key = entry.session  # Adjust 'session' to the actual field name
-            if session_key not in grouped_data:
-                grouped_data[session_key] = []
-            grouped_data[session_key].append({
-                'val2': entry.val2,
-                'val3': entry.val3,
-                'val4': entry.val4,
-                'val5': entry.val5
+    def format_search_results(self, results):
+        formatted_results = []
+        for doc, score in results:
+            formatted_results.append({
+                "score": score,
+                "text": doc.page_content,
+                "metadata": doc.metadata
             })
+        return formatted_results
 
-        return JsonResponse({'grouped_data': grouped_data}, safe=False, status=200)
-    else:
-        return JsonResponse({'error': 'Invalid request method'}, status=400)
 
+@api_view(['POST'])
+def ravinew(request):
+    if request.method == 'POST':
+        try:
+            data = request.data
+            query = data.get('query')
+
+            if not query:
+                return Response({"error": "Query is required"}, status=400)
+
+            QDRANT_URL = os.getenv('QDRANT_URL')
+            QDRANT_API_KEY = os.getenv('QDRANT_API_KEY')
+            COLLECTION_NAME = "Ravi_Work_quick_new"
+
+            searcher = HybridSearcher(QDRANT_URL, QDRANT_API_KEY,
+                                      COLLECTION_NAME)
+            results = searcher.hybrid_search(query)
+            formatted_results = searcher.format_search_results(results)
+            return Response({"query": query, "results": formatted_results})
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+    return Response({"error": "Only POST requests are allowed"}, status=405)
+
+'''
+@csrf_exempt
+@api_view(['POST'])
+def ravinew(request):
+    if request.method == 'POST':
+        data = request.data
+        query = data.get('query')
+        QDRANT_URL = os.getenv("QDRANT_URL")
+        QDRANT_API_KEY = os.getenv('QDRANT_API_KEY')
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+
+        collection_name = "Ravi_Work_quick_new"
+        embeddings = HuggingFaceEmbeddings()
+
+        query_vector = embeddings.embed_query(query)
+        search_result = client.search(collection_name=collection_name,
+                                      query_vector=query_vector,
+                                      limit=1)
+
+        if search_result:
+            top_result = search_result[0]
+            print(f"Score: {top_result.score}")
+            print(f"Text: {top_result.payload['text']}")
+            print(f"Metadata: {top_result.payload['metadata']}")
+            return HttpResponse(top_result.payload['text'],
+                                content_type='text/plain')
+        else:
+            return HttpResponse("No matching documents found.",
+                                content_type='text/plain')
+
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+'''
+'''
+@csrf_exempt
+@api_view(['POST'])
+def ravinew(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            query = data.get('query')
+            collection_name = data.get('collection_name',
+                                       'ravi_work_quick_new_hybrid')
+            limit = data.get('limit', 5)
+
+            if not query:
+                return JsonResponse({"error": "Query is required"}, status=400)
+
+            qdrant_client = QdrantClient(
+                "https://dc5ccf61-035c-401f-a05c-36a2dea45e13.us-east4-0.gcp.cloud.qdrant.io",
+                api_key="bclgpbFspJouOCD3If3nqQdl3VyOO_yWfLjsuwvVNYt9o_CV3LbPzg"
+            )
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+
+            # Encode query
+            query_vector = model.encode(query).tolist()
+
+            # Perform search
+            search_result = qdrant_client.search(
+                collection_name=collection_name,
+                query_vector=query_vector,
+                limit=limit)
+
+            # Format results
+            formatted_results = []
+            for result in search_result:
+                formatted_results.append({
+                    "score": result.score,
+                    "text": result.payload.get('text', '')
+                })
+
+            return JsonResponse({"query": query, "results": formatted_results})
+
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON in request body"},
+                                status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Only POST requests are allowed"},
+                        status=405)
+'''
+'''
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from qdrant_client import QdrantClient, models
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.schema import Document
+
+
+class HybridSearcher:
+
+    def __init__(self, qdrant_url, qdrant_api_key, collection_name):
+        self.qdrant_url = qdrant_url
+        self.qdrant_api_key = qdrant_api_key
+        self.collection_name = collection_name
+
+        # Initialize Qdrant client
+        self.client = QdrantClient(url=self.qdrant_url,
+                                   api_key=self.qdrant_api_key,
+                                   prefer_grpc=True)
+
+        # Initialize embeddings
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+    def hybrid_search(self, query, limit=5):
+        search_results = self.client.query(
+            collection_name=self.collection_name,
+            query_text=query,
+            query_vector=self.embeddings.embed_query(query),
+            query_filter=None,  # You can add filters if needed
+            limit=limit)
+
+        results = []
+        for hit in search_results:
+            if hit.payload and "page_content" in hit.payload:
+                doc = Document(page_content=hit.payload["page_content"],
+                               metadata=hit.payload.get("metadata", {}))
+                results.append((doc, hit.score))
+
+        return results
+
+    def format_search_results(self, results):
+        formatted_results = []
+        for doc, score in results:
+            formatted_results.append({
+                "score": score,
+                "text": doc.page_content,
+                "metadata": doc.metadata
+            })
+        return formatted_results
+
+
+# Django view
+@csrf_exempt
+@api_view(['POST'])
+def ravinew(request):
+    if request.method == 'POST':
+        try:
+            data = request.data
+            query = data.get('query')
+
+            if not query:
+                return Response({"error": "Query is required"}, status=400)
+
+            QDRANT_URL = "https://dc5ccf61-035c-401f-a05c-36a2dea45e13.us-east4-0.gcp.cloud.qdrant.io:6333"
+            QDRANT_API_KEY = "bclgpbFspJouOCD3If3nqQdl3VyOO_yWfLjsuwvVNYt9o_CV3LbPzg"
+            COLLECTION_NAME = "ravi_work_quick_new_hybrid"
+
+            searcher = HybridSearcher(QDRANT_URL, QDRANT_API_KEY,
+                                      COLLECTION_NAME)
+            results = searcher.hybrid_search(query)
+            formatted_results = searcher.format_search_results(results)
+
+            return Response({"query": query, "results": formatted_results})
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    return Response({"error": "Only POST requests are allowed"}, status=405)
+'''
