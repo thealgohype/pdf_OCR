@@ -3,23 +3,7 @@ from django.http.response import json
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view
 from django.http import HttpResponse
-import base64
-from openai import OpenAI
-from PIL import Image
-import boto3
-import io
-from PIL import Image
-import base64
 import os
-from botocore.exceptions import ClientError
-import google.generativeai as genai
-from anthropic import Anthropic
-import re
-from collections import Counter
-import time
-from pdf2image import convert_from_bytes
-import tempfile
-import fitz
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest

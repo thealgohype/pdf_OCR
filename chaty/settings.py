@@ -4,19 +4,15 @@ import os
 DEFAULT_STORAGE_ALIAS = 'default'
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
-# SECURITY WARNING: keep the secret key used in production secret!
+
 SECRET_KEY = 'django-insecure-1l=gi9a4@%egq&(hzrusslji4a2j-&&fgqz!^jjad80s7swo95'
 # SECURITY WARNING: don't run with debug turned on in production!
 
 PORT = os.getenv('PORT', '8000')
 
-ALLOWED_HOSTS = ['*']  # Or specify your domain
+ALLOWED_HOSTS = ['*']
 
-# If you need any specific configuration for Render
 if os.getenv('RENDER'):
-    # Any Render-specific settings can go here
     pass
 
 DEBUG = False
