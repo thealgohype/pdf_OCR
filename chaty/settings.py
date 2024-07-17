@@ -6,9 +6,8 @@ DEFAULT_STORAGE_ALIAS = 'default'
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-1l=gi9a4@%egq&(hzrusslji4a2j-&&fgqz!^jjad80s7swo95'
-# SECURITY WARNING: don't run with debug turned on in production!
 
-ALLOWED_HOSTS = ['*']  
+ALLOWED_HOSTS = ['*']
 if os.getenv('RENDER'):
     pass
 
@@ -27,6 +26,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'prochat',
 ]
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -59,8 +59,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'neondb',
         'USER': 'neondb_owner',
-        'PASSWORD': os.environ['PGPASSWORD'],
-        'HOST': os.environ['PGHOST'],
+        'PASSWORD': "1MclzvSqw7Xe",
+        'HOST': "ep-young-rain-a5x6nbwa.us-east-2.aws.neon.tech",
         'PORT': '5432',
     }
 }
