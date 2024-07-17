@@ -7,7 +7,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-1l=gi9a4@%egq&(hzrusslji4a2j-&&fgqz!^jjad80s7swo95'
 
-ALLOWED_HOSTS = ['*']
+PORT = int(os.environ.get('PORT', 8000))
+
+ALLOWED_HOSTS = ['*']  # Be more specific in production
+CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com']
 if os.getenv('RENDER'):
     pass
 
