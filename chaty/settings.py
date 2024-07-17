@@ -8,10 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-1l=gi9a4@%egq&(hzrusslji4a2j-&&fgqz!^jjad80s7swo95'
 # SECURITY WARNING: don't run with debug turned on in production!
 
-PORT = os.getenv('PORT', '8000')
-
-ALLOWED_HOSTS = ['*']
-
+ALLOWED_HOSTS = ['*']  
 if os.getenv('RENDER'):
     pass
 
@@ -62,8 +59,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'neondb',
         'USER': 'neondb_owner',
-        'PASSWORD': 'HDvoa4l7skLM',
-        'HOST': 'ep-gentle-truth-a5efpx92.us-east-2.aws.neon.tech',
+        'PASSWORD': os.environ['PGPASSWORD'],
+        'HOST': os.environ['PGHOST'],
         'PORT': '5432',
     }
 }

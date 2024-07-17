@@ -13,3 +13,4 @@ google-generativeai
 anthropic
 django_heroku
 django-cors-headers
+gunicorn
