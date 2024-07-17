@@ -14,3 +14,5 @@ anthropic
 django_heroku
 django-cors-headers
 gunicorn
+langchain_community
+langchain
