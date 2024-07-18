@@ -100,6 +100,7 @@ def ravinew(request):
             return Response({"error": str(e)}, status=500)
     return Response({"error": "Only POST requests are allowed"}, status=405)
 
+
 '''
 @csrf_exempt
 @api_view(['POST'])

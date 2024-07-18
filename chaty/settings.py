@@ -1,22 +1,35 @@
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DEFAULT_STORAGE_ALIAS = 'default'
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-1l=gi9a4@%egq&(hzrusslji4a2j-&&fgqz!^jjad80s7swo95'
+SECRET_KEY = os.getenv("django_secret_key")
 
 PORT = int(os.environ.get('PORT', 8000))
 
-ALLOWED_HOSTS = ['*']  # Be more specific in production
+SECURE_HSTS_SECONDS = 31536000
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+ALLOWED_HOSTS = [
+    '*',
+    'bc5a241d-b49d-442c-9066-9037e101b429-00-d4ctq7misdo3.pike.replit.dev',
+    "https://bc5a241d-b49d-442c-9066-9037e101b429-00-d4ctq7misdo3.pike.replit.dev:8000/",
+]  # Be more specific in production
 CSRF_TRUSTED_ORIGINS = ['https://*.onrender.com']
 if os.getenv('RENDER'):
     pass
 
 DEBUG = False
+X_FRAME_OPTIONS = 'DENY'
 
-X_FRAME_OPTIONS = 'ALLOW-FROM *'
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -62,8 +75,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'neondb',
         'USER': 'neondb_owner',
-        'PASSWORD': "1MclzvSqw7Xe",
-        'HOST': "ep-young-rain-a5x6nbwa.us-east-2.aws.neon.tech",
+        'PASSWORD': os.getenv("PGPASSWORD"),
+        'HOST': os.getenv("PGHOST"),
         'PORT': '5432',
     }
 }

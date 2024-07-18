@@ -16,3 +16,4 @@ django-cors-headers
 gunicorn
 langchain_community
 langchain
+psycopg2
